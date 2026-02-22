@@ -1,97 +1,105 @@
-import db from '../db/database.js';
+import pool from '../db/database.js';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Insert new image record into database
  */
-export function insertImage(imageData) {
-  const stmt = db.prepare(`
+export async function insertImage(imageData) {
+  const id = uuidv4();
+
+  const query = `
     INSERT INTO images (
       id, keyword, keyword_normalized, category, prompt,
-      filename, file_path, file_size, width, height
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+      filename, image_url, file_size, width, height
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    RETURNING *
+  `;
 
-  const id = uuidv4();
-  const info = stmt.run(
+  const values = [
     id,
     imageData.keyword,
     imageData.keyword_normalized,
     imageData.category || null,
     imageData.prompt,
     imageData.filename,
-    imageData.file_path,
+    imageData.imageUrl,
     imageData.file_size,
     imageData.width,
     imageData.height
-  );
+  ];
 
-  return getImageById(id);
+  const result = await pool.query(query, values);
+  return result.rows[0];
 }
 
 /**
  * Get image by ID
  */
-export function getImageById(id) {
-  const stmt = db.prepare('SELECT * FROM images WHERE id = ? AND is_active = 1');
-  return stmt.get(id);
+export async function getImageById(id) {
+  const query = 'SELECT * FROM images WHERE id = $1 AND is_active = TRUE';
+  const result = await pool.query(query, [id]);
+  return result.rows[0] || null;
 }
 
 /**
  * Search for existing images by keyword
  */
-export function searchByKeyword(keyword, category = null) {
+export async function searchByKeyword(keyword, category = null) {
   const normalized = keyword.toLowerCase().trim().replace(/\s+/g, ' ');
 
-  let query = 'SELECT * FROM images WHERE keyword_normalized = ? AND is_active = 1';
+  let query = 'SELECT * FROM images WHERE keyword_normalized = $1 AND is_active = TRUE';
   const params = [normalized];
 
   if (category) {
-    query += ' AND category = ?';
+    query += ' AND category = $2';
     params.push(category);
   }
 
   query += ' ORDER BY created_at DESC LIMIT 1';
 
-  const stmt = db.prepare(query);
-  return stmt.get(...params);
+  const result = await pool.query(query, params);
+  return result.rows[0] || null;
 }
 
 /**
  * Fuzzy search for similar keywords
  */
-export function fuzzySearchKeyword(keyword, limit = 5) {
+export async function fuzzySearchKeyword(keyword, limit = 5) {
   const normalized = keyword.toLowerCase().trim().replace(/\s+/g, ' ');
-  const stmt = db.prepare(`
+  const query = `
     SELECT * FROM images
-    WHERE keyword_normalized LIKE ? AND is_active = 1
+    WHERE keyword_normalized LIKE $1 AND is_active = TRUE
     ORDER BY created_at DESC
-    LIMIT ?
-  `);
+    LIMIT $2
+  `;
 
-  return stmt.all(`%${normalized}%`, limit);
+  const result = await pool.query(query, [`%${normalized}%`, limit]);
+  return result.rows;
 }
 
 /**
  * Get paginated gallery
  */
-export function getGallery({ page = 1, limit = 24, category = null, sort = 'newest', search = null }) {
+export async function getGallery({ page = 1, limit = 24, category = null, sort = 'newest', search = null }) {
   const offset = (page - 1) * limit;
 
-  let query = 'SELECT * FROM images WHERE is_active = 1';
+  let query = 'SELECT * FROM images WHERE is_active = TRUE';
   const params = [];
+  let paramCount = 1;
 
   // Category filter
   if (category) {
-    query += ' AND category = ?';
+    query += ` AND category = $${paramCount}`;
     params.push(category);
+    paramCount++;
   }
 
   // Search filter
   if (search) {
     const normalized = search.toLowerCase().trim().replace(/\s+/g, ' ');
-    query += ' AND keyword_normalized LIKE ?';
+    query += ` AND keyword_normalized LIKE $${paramCount}`;
     params.push(`%${normalized}%`);
+    paramCount++;
   }
 
   // Sorting
@@ -102,29 +110,31 @@ export function getGallery({ page = 1, limit = 24, category = null, sort = 'newe
   }
 
   // Pagination
-  query += ' LIMIT ? OFFSET ?';
+  query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
   params.push(limit, offset);
 
-  const stmt = db.prepare(query);
-  const images = stmt.all(...params);
+  const result = await pool.query(query, params);
+  const images = result.rows;
 
   // Get total count for pagination
-  let countQuery = 'SELECT COUNT(*) as total FROM images WHERE is_active = 1';
+  let countQuery = 'SELECT COUNT(*) as total FROM images WHERE is_active = TRUE';
   const countParams = [];
+  let countParamCount = 1;
 
   if (category) {
-    countQuery += ' AND category = ?';
+    countQuery += ` AND category = $${countParamCount}`;
     countParams.push(category);
+    countParamCount++;
   }
 
   if (search) {
     const normalized = search.toLowerCase().trim().replace(/\s+/g, ' ');
-    countQuery += ' AND keyword_normalized LIKE ?';
+    countQuery += ` AND keyword_normalized LIKE $${countParamCount}`;
     countParams.push(`%${normalized}%`);
   }
 
-  const countStmt = db.prepare(countQuery);
-  const { total } = countStmt.get(...countParams);
+  const countResult = await pool.query(countQuery, countParams);
+  const total = parseInt(countResult.rows[0].total);
 
   return {
     images,
@@ -138,90 +148,96 @@ export function getGallery({ page = 1, limit = 24, category = null, sort = 'newe
 /**
  * Get popular images (most downloaded)
  */
-export function getPopularImages(limit = 12) {
-  const stmt = db.prepare(`
+export async function getPopularImages(limit = 12) {
+  const query = `
     SELECT * FROM images
-    WHERE is_active = 1
+    WHERE is_active = TRUE
     ORDER BY download_count DESC, created_at DESC
-    LIMIT ?
-  `);
-  return stmt.all(limit);
+    LIMIT $1
+  `;
+  const result = await pool.query(query, [limit]);
+  return result.rows;
 }
 
 /**
  * Get recent images
  */
-export function getRecentImages(limit = 12) {
-  const stmt = db.prepare(`
+export async function getRecentImages(limit = 12) {
+  const query = `
     SELECT * FROM images
-    WHERE is_active = 1
+    WHERE is_active = TRUE
     ORDER BY created_at DESC
-    LIMIT ?
-  `);
-  return stmt.all(limit);
+    LIMIT $1
+  `;
+  const result = await pool.query(query, [limit]);
+  return result.rows;
 }
 
 /**
  * Get images by category
  */
-export function getImagesByCategory(category, limit = 6) {
-  const stmt = db.prepare(`
+export async function getImagesByCategory(category, limit = 6) {
+  const query = `
     SELECT * FROM images
-    WHERE category = ? AND is_active = 1
+    WHERE category = $1 AND is_active = TRUE
     ORDER BY created_at DESC
-    LIMIT ?
-  `);
-  return stmt.all(category, limit);
+    LIMIT $2
+  `;
+  const result = await pool.query(query, [category, limit]);
+  return result.rows;
 }
 
 /**
  * Increment download counter
  */
-export function incrementDownloadCount(id) {
-  const stmt = db.prepare('UPDATE images SET download_count = download_count + 1 WHERE id = ?');
-  stmt.run(id);
+export async function incrementDownloadCount(id) {
+  const query = 'UPDATE images SET download_count = download_count + 1 WHERE id = $1';
+  await pool.query(query, [id]);
   return getImageById(id);
 }
 
 /**
  * Increment print counter
  */
-export function incrementPrintCount(id) {
-  const stmt = db.prepare('UPDATE images SET print_count = print_count + 1 WHERE id = ?');
-  stmt.run(id);
+export async function incrementPrintCount(id) {
+  const query = 'UPDATE images SET print_count = print_count + 1 WHERE id = $1';
+  await pool.query(query, [id]);
   return getImageById(id);
 }
 
 /**
  * Soft delete image
  */
-export function deleteImage(id) {
-  const stmt = db.prepare('UPDATE images SET is_active = 0 WHERE id = ?');
-  stmt.run(id);
+export async function deleteImage(id) {
+  const query = 'UPDATE images SET is_active = FALSE WHERE id = $1';
+  await pool.query(query, [id]);
   return true;
 }
 
 /**
  * Get database statistics
  */
-export function getStats() {
-  const totalStmt = db.prepare('SELECT COUNT(*) as total FROM images WHERE is_active = 1');
-  const { total } = totalStmt.get();
+export async function getStats() {
+  const totalQuery = 'SELECT COUNT(*) as total FROM images WHERE is_active = TRUE';
+  const totalResult = await pool.query(totalQuery);
+  const total = parseInt(totalResult.rows[0].total);
 
-  const categoriesStmt = db.prepare(`
+  const categoriesQuery = `
     SELECT category, COUNT(*) as count
     FROM images
-    WHERE is_active = 1 AND category IS NOT NULL
+    WHERE is_active = TRUE AND category IS NOT NULL
     GROUP BY category
-  `);
-  const categories = categoriesStmt.all();
+  `;
+  const categoriesResult = await pool.query(categoriesQuery);
+  const categories = categoriesResult.rows;
 
-  const downloadsStmt = db.prepare('SELECT SUM(download_count) as total FROM images WHERE is_active = 1');
-  const { total: totalDownloads } = downloadsStmt.get();
+  const downloadsQuery = 'SELECT SUM(download_count) as total FROM images WHERE is_active = TRUE';
+  const downloadsResult = await pool.query(downloadsQuery);
+  const totalDownloads = parseInt(downloadsResult.rows[0].total) || 0;
 
   return {
     totalImages: total,
-    totalDownloads: totalDownloads || 0,
+    totalDownloads: totalDownloads,
     byCategory: categories
   };
 }

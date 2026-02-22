@@ -18,7 +18,7 @@ const router = express.Router();
  * GET /api/gallery
  * Get paginated gallery with optional filters
  */
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 24;
@@ -26,7 +26,7 @@ router.get('/', (req, res) => {
     const sort = req.query.sort || 'newest';
     const search = req.query.search || null;
 
-    const result = getGallery({ page, limit, category, sort, search });
+    const result = await getGallery({ page, limit, category, sort, search });
 
     // Format response
     const formattedImages = result.images.map(img => ({
@@ -57,10 +57,10 @@ router.get('/', (req, res) => {
  * GET /api/gallery/popular
  * Get most downloaded images
  */
-router.get('/popular', (req, res) => {
+router.get('/popular', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 12;
-    const images = getPopularImages(limit);
+    const images = await getPopularImages(limit);
 
     const formattedImages = images.map(img => ({
       id: img.id,
@@ -83,10 +83,10 @@ router.get('/popular', (req, res) => {
  * GET /api/gallery/recent
  * Get recently generated images
  */
-router.get('/recent', (req, res) => {
+router.get('/recent', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 12;
-    const images = getRecentImages(limit);
+    const images = await getRecentImages(limit);
 
     const formattedImages = images.map(img => ({
       id: img.id,
@@ -109,7 +109,7 @@ router.get('/recent', (req, res) => {
  * GET /api/gallery/search
  * Search for images by keyword
  */
-router.get('/search', (req, res) => {
+router.get('/search', async (req, res) => {
   try {
     const keyword = req.query.keyword;
     const category = req.query.category || null;
@@ -119,7 +119,7 @@ router.get('/search', (req, res) => {
     }
 
     // Try exact match first
-    const exactMatch = searchByKeyword(keyword, category);
+    const exactMatch = await searchByKeyword(keyword, category);
 
     if (exactMatch) {
       return res.json({
@@ -138,7 +138,7 @@ router.get('/search', (req, res) => {
     }
 
     // Try fuzzy search
-    const fuzzyResults = fuzzySearchKeyword(keyword, 5);
+    const fuzzyResults = await fuzzySearchKeyword(keyword, 5);
 
     if (fuzzyResults.length > 0) {
       const formattedImages = fuzzyResults.map(img => ({
@@ -174,9 +174,9 @@ router.get('/search', (req, res) => {
  * GET /api/gallery/stats
  * Get gallery statistics
  */
-router.get('/stats', (req, res) => {
+router.get('/stats', async (req, res) => {
   try {
-    const stats = getStats();
+    const stats = await getStats();
     res.json(stats);
   } catch (error) {
     console.error('Error fetching stats:', error);
@@ -188,10 +188,10 @@ router.get('/stats', (req, res) => {
  * GET /api/gallery/:id
  * Get single image by ID
  */
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const image = getImageById(id);
+    const image = await getImageById(id);
 
     if (!image) {
       return res.status(404).json({ error: 'Image not found' });
@@ -200,7 +200,8 @@ router.get('/:id', (req, res) => {
     // Get related images (same category)
     let relatedImages = [];
     if (image.category) {
-      relatedImages = getImagesByCategory(image.category, 6)
+      const related = await getImagesByCategory(image.category, 6);
+      relatedImages = related
         .filter(img => img.id !== image.id)
         .map(img => ({
           id: img.id,
@@ -234,10 +235,10 @@ router.get('/:id', (req, res) => {
  * POST /api/gallery/:id/download
  * Increment download counter
  */
-router.post('/:id/download', (req, res) => {
+router.post('/:id/download', async (req, res) => {
   try {
     const { id } = req.params;
-    const image = incrementDownloadCount(id);
+    const image = await incrementDownloadCount(id);
 
     if (!image) {
       return res.status(404).json({ error: 'Image not found' });
@@ -254,10 +255,10 @@ router.post('/:id/download', (req, res) => {
  * POST /api/gallery/:id/print
  * Increment print counter
  */
-router.post('/:id/print', (req, res) => {
+router.post('/:id/print', async (req, res) => {
   try {
     const { id } = req.params;
-    const image = incrementPrintCount(id);
+    const image = await incrementPrintCount(id);
 
     if (!image) {
       return res.status(404).json({ error: 'Image not found' });

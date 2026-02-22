@@ -72,7 +72,7 @@ router.post('/', async (req, res) => {
 
     // Check if image already exists in gallery (unless forceNew is true)
     if (!forceNew) {
-      const existingImage = searchByKeyword(normalizedKeyword, category);
+      const existingImage = await searchByKeyword(normalizedKeyword, category);
       if (existingImage) {
         return res.json({
           id: existingImage.id,
@@ -101,13 +101,13 @@ router.post('/', async (req, res) => {
     const imageFile = await saveImageFromBuffer(buffer);
 
     // Save to database
-    const imageRecord = insertImage({
+    const imageRecord = await insertImage({
       keyword: keyword.trim(),
       keyword_normalized: normalizedKeyword,
       category: category || null,
       prompt: enhancedPrompt,
       filename: imageFile.filename,
-      file_path: imageFile.filePath,
+      imageUrl: `/uploads/${imageFile.filename}`,
       file_size: imageFile.fileSize,
       width: imageFile.width,
       height: imageFile.height
@@ -119,8 +119,8 @@ router.post('/', async (req, res) => {
       category: imageRecord.category,
       imageUrl: `/uploads/${imageRecord.filename}`,
       prompt: imageRecord.prompt,
-      downloadCount: 0,
-      printCount: 0,
+      downloadCount: imageRecord.download_count,
+      printCount: imageRecord.print_count,
       fromCache: false,
       createdAt: imageRecord.created_at
     });

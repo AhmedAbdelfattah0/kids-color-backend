@@ -8,6 +8,8 @@ import generateRouter from './routes/generate.js';
 import galleryRouter from './routes/gallery.js';
 import categoriesRouter from './routes/categories.js';
 import { getUploadsPath } from './services/imageService.js';
+import { runMigrations } from './db/migrations.js';
+import pool from './db/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -90,9 +92,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`
+// Start server with database migrations
+async function startServer() {
+  try {
+    await runMigrations(pool);
+    console.log('[DB] Database ready');
+
+    app.listen(PORT, () => {
+      console.log(`
 ╔═══════════════════════════════════════════╗
 ║                                           ║
 ║         🎨 KidsColor API Server           ║
@@ -104,7 +111,14 @@ app.listen(PORT, () => {
 ║  Health: http://localhost:${PORT}/health   ║
 ║                                           ║
 ╚═══════════════════════════════════════════╝
-  `);
-});
+      `);
+    });
+  } catch (err) {
+    console.error('[DB] Failed to start server:', err);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 export default app;
