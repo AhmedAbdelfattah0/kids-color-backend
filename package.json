@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "node --watch src/app.js"
+    "dev": "node --watch src/app.js",
+    "postinstall": "npm rebuild sharp"
   },
   "keywords": ["coloring", "kids", "ai", "printable"],
   "author": "",
@@ -17,7 +18,6 @@
     "dotenv": "^16.0.0",
     "axios": "^1.6.0",
     "helmet": "^7.0.0",
-    "better-sqlite3": "^9.0.0",
     "pg": "^8.11.0",
     "uuid": "^9.0.0",
     "sharp": "^0.33.0"
