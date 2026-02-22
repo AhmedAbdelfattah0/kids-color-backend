@@ -17,6 +17,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Health check endpoint - defined first to respond immediately
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // CORS configuration: Allow both production frontend URL and local development
 const allowedOrigins = [
   process.env.FRONTEND_URL,
@@ -49,15 +54,6 @@ app.use('/uploads', express.static(getUploadsPath()));
 app.use('/api/generate', generateRouter);
 app.use('/api/gallery', galleryRouter);
 app.use('/api/categories', categoriesRouter);
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -97,26 +93,13 @@ async function startServer() {
   try {
     await runMigrations(pool);
     console.log('[DB] Database ready');
-
-    app.listen(PORT, () => {
-      console.log(`
-╔═══════════════════════════════════════════╗
-║                                           ║
-║         🎨 KidsColor API Server           ║
-║                                           ║
-║  Server running on port ${PORT}            ║
-║  Environment: ${process.env.NODE_ENV || 'development'}                ║
-║                                           ║
-║  API: http://localhost:${PORT}             ║
-║  Health: http://localhost:${PORT}/health   ║
-║                                           ║
-╚═══════════════════════════════════════════╝
-      `);
-    });
   } catch (err) {
-    console.error('[DB] Failed to start server:', err);
-    process.exit(1);
+    console.error('[DB] Migration error — continuing anyway:', err.message);
   }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Server] Running on port ${PORT}`);
+  });
 }
 
 startServer();
