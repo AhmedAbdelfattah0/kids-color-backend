@@ -6,8 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "node --watch src/app.js",
-    "postinstall": "npm rebuild sharp"
+    "dev": "node --watch src/app.js"
   },
   "keywords": ["coloring", "kids", "ai", "printable"],
   "author": "",
