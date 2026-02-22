@@ -8,13 +8,7 @@ const pool = new Pool({
     : false
 });
 
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error('[DB] Connection failed:', err.message);
-  } else {
-    console.log('[DB] Connected to PostgreSQL successfully');
-    release();
-  }
-});
+// Don't test connection immediately - let it connect lazily
+// This prevents blocking server startup if DB is slow or unavailable
 
 export default pool;

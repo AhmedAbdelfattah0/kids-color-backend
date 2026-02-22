@@ -11,11 +11,17 @@ import { getUploadsPath } from './services/imageService.js';
 import { runMigrations } from './db/migrations.js';
 import pool from './db/database.js';
 
+console.log('[App] Starting KidsColor backend...');
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+console.log('[App] Port:', PORT);
+console.log('[App] NODE_ENV:', process.env.NODE_ENV || 'development');
+console.log('[App] DATABASE_URL:', process.env.DATABASE_URL ? 'Set' : 'Missing');
 
 // Health check endpoint - defined first to respond immediately
 app.get('/health', (req, res) => {
@@ -91,17 +97,29 @@ app.use((err, req, res, next) => {
 // Start server with database migrations
 async function startServer() {
   try {
-    await runMigrations(pool);
-    console.log('[DB] Database ready');
-  } catch (err) {
-    console.error('[DB] Migration error — continuing anyway:', err.message);
-  }
+    console.log('[Server] Starting server on port', PORT);
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Server] Running on port ${PORT}`);
-  });
+    // Try migrations but don't block on failure
+    try {
+      await runMigrations(pool);
+      console.log('[DB] Database ready');
+    } catch (err) {
+      console.error('[DB] Migration error — continuing anyway:', err.message);
+    }
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[Server] Running on port ${PORT}`);
+      console.log(`[Server] Health check available at http://0.0.0.0:${PORT}/health`);
+    });
+  } catch (err) {
+    console.error('[Server] Fatal error:', err);
+    process.exit(1);
+  }
 }
 
-startServer();
+startServer().catch(err => {
+  console.error('[Server] Unhandled error:', err);
+  process.exit(1);
+});
 
 export default app;
