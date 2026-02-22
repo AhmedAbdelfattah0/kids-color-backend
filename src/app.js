@@ -14,7 +14,12 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:4200';
+
+// CORS configuration: Allow both production frontend URL and local development
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:4200'
+].filter(Boolean);
 
 // Middleware
 app.use(helmet({
@@ -22,7 +27,7 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: allowedOrigins,
   credentials: true
 }));
 
