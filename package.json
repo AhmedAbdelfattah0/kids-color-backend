@@ -1,0 +1,24 @@
+{
+  "name": "kidscolor-backend",
+  "version": "1.0.0",
+  "description": "Backend API for KidsColor - Free printable coloring pages generator",
+  "main": "src/app.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "node --watch src/app.js"
+  },
+  "keywords": ["coloring", "kids", "ai", "printable"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.0",
+    "axios": "^1.6.0",
+    "helmet": "^7.0.0",
+    "better-sqlite3": "^9.0.0",
+    "uuid": "^9.0.0",
+    "sharp": "^0.33.0"
+  }
+}
