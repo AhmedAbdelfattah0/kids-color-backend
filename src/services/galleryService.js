@@ -81,7 +81,7 @@ export async function fuzzySearchKeyword(keyword, limit = 5) {
 /**
  * Get paginated gallery
  */
-export async function getGallery({ page = 1, limit = 24, category = null, sort = 'newest', search = null }) {
+export async function getGallery({ page = 1, limit = 24, category = null, sort = 'newest', search = null, source = null }) {
   const offset = (page - 1) * limit;
 
   let query = 'SELECT * FROM images WHERE is_active = TRUE';
@@ -101,6 +101,13 @@ export async function getGallery({ page = 1, limit = 24, category = null, sort =
     query += ` AND keyword_normalized LIKE $${paramCount}`;
     params.push(`%${normalized}%`);
     paramCount++;
+  }
+
+  // Source filter
+  if (source === 'ai') {
+    query += ` AND source = 'ai'`;
+  } else if (source === 'library') {
+    query += ` AND source IN ('openclipart', 'wikimedia', 'library')`;
   }
 
   // Sorting
@@ -132,6 +139,12 @@ export async function getGallery({ page = 1, limit = 24, category = null, sort =
     const normalized = search.toLowerCase().trim().replace(/\s+/g, ' ');
     countQuery += ` AND keyword_normalized LIKE $${countParamCount}`;
     countParams.push(`%${normalized}%`);
+  }
+
+  if (source === 'ai') {
+    countQuery += ` AND source = 'ai'`;
+  } else if (source === 'library') {
+    countQuery += ` AND source IN ('openclipart', 'wikimedia', 'library')`;
   }
 
   const countResult = await pool.query(countQuery, countParams);

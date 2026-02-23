@@ -25,8 +25,9 @@ router.get('/', async (req, res) => {
     const category = req.query.category || null;
     const sort = req.query.sort || 'newest';
     const search = req.query.search || null;
+    const source = req.query.source || null;
 
-    const result = await getGallery({ page, limit, category, sort, search });
+    const result = await getGallery({ page, limit, category, sort, search, source });
 
     // Format response
     const formattedImages = result.images.map(img => ({
@@ -37,6 +38,7 @@ router.get('/', async (req, res) => {
       prompt: img.prompt,
       downloadCount: img.download_count,
       printCount: img.print_count,
+      source: img.source,
       createdAt: img.created_at
     }));
 
@@ -69,6 +71,7 @@ router.get('/popular', async (req, res) => {
       imageUrl: `/uploads/${img.filename}`,
       downloadCount: img.download_count,
       printCount: img.print_count,
+      source: img.source,
       createdAt: img.created_at
     }));
 
@@ -95,6 +98,7 @@ router.get('/recent', async (req, res) => {
       imageUrl: `/uploads/${img.filename}`,
       downloadCount: img.download_count,
       printCount: img.print_count,
+      source: img.source,
       createdAt: img.created_at
     }));
 
@@ -221,6 +225,7 @@ router.get('/:id', async (req, res) => {
       prompt: image.prompt,
       downloadCount: image.download_count,
       printCount: image.print_count,
+      source: image.source,
       createdAt: image.created_at,
       relatedImages
     });
