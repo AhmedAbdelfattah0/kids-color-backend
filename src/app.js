@@ -7,7 +7,6 @@ import { fileURLToPath } from 'url';
 import generateRouter from './routes/generate.js';
 import galleryRouter from './routes/gallery.js';
 import categoriesRouter from './routes/categories.js';
-import { getUploadsPath } from './services/imageService.js';
 import { runMigrations } from './db/migrations.js';
 import pool from './db/database.js';
 
@@ -54,7 +53,11 @@ app.use((req, res, next) => {
 });
 
 // Static file serving for uploaded images
-app.use('/uploads', express.static(getUploadsPath()));
+const uploadsDir = process.env.NODE_ENV === 'production'
+  ? '/tmp/uploads'
+  : path.join(process.cwd(), 'uploads');
+
+app.use('/uploads', express.static(uploadsDir));
 
 // API Routes
 app.use('/api/generate', generateRouter);
