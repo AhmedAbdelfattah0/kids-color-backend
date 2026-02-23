@@ -24,15 +24,16 @@ export async function saveImage(imageUrl) {
     filename,
     filePath,
     fileSize: response.data.length,
-    publicUrl: `/uploads/${filename}`
+    publicUrl: `/images/${filename}`
   };
 }
 
 /**
  * Save image from buffer (for AI-generated images)
  */
-export async function saveImageFromBuffer(buffer) {
-  const filename = `${uuidv4()}.png`;
+export async function saveImageFromBuffer(buffer, mimeType = 'image/png') {
+  const ext = mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/webp' ? 'webp' : 'png';
+  const filename = `${uuidv4()}.${ext}`;
   const filePath = path.join(uploadsDir, filename);
 
   fs.writeFileSync(filePath, buffer);
@@ -41,6 +42,7 @@ export async function saveImageFromBuffer(buffer) {
     filename,
     filePath,
     fileSize: buffer.length,
+    mimeType,
     width: 1024,
     height: 1024
   };
@@ -52,11 +54,15 @@ const DOWNLOAD_HEADERS = {
 
 /**
  * Download image from URL and save to disk (for library images)
+ * Detects SVG vs PNG from Content-Type and uses the correct extension.
  */
 export async function saveImageFromUrl(imageUrl, keyword, category, source = 'library') {
   const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 15000, headers: DOWNLOAD_HEADERS });
   const buffer = Buffer.from(response.data);
-  const filename = `${uuidv4()}.png`;
+
+  const mimeType = response.headers['content-type']?.split(';')[0]?.trim() || 'image/png';
+  const ext = mimeType === 'image/svg+xml' ? 'svg' : 'png';
+  const filename = `${uuidv4()}.${ext}`;
   const filePath = path.join(uploadsDir, filename);
   fs.writeFileSync(filePath, buffer);
 
@@ -64,7 +70,9 @@ export async function saveImageFromUrl(imageUrl, keyword, category, source = 'li
     filename,
     filePath,
     fileSize: buffer.length,
-    publicUrl: `/uploads/${filename}`,
+    publicUrl: `/images/${filename}`,
+    mimeType,
+    buffer,
     source
   };
 }

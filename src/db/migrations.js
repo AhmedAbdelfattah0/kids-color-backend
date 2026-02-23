@@ -27,6 +27,14 @@ export async function runMigrations(pool) {
     await pool.query(`
       ALTER TABLE images ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'ai';
     `);
+
+    await pool.query(`
+      ALTER TABLE images ADD COLUMN IF NOT EXISTS image_data BYTEA;
+    `);
+
+    await pool.query(`
+      ALTER TABLE images ADD COLUMN IF NOT EXISTS mime_type TEXT DEFAULT 'image/png';
+    `);
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);

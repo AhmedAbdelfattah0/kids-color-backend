@@ -2,6 +2,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 
 const TIMEOUT_MS = 15000;
+const TIMEOUT_MS_SLOW = 45000; // for providers known to be slower
 
 /**
  * Validate that a buffer is a valid PNG image
@@ -11,19 +12,26 @@ function isValidPNG(buffer) {
 }
 
 /**
- * 1. Pollinations.ai - FLUX model (no key needed)
+ * 1. Pollinations.ai - FLUX model (requires POLLINATIONS_API_KEY)
  */
 async function tryPollinationsFlux(prompt) {
+  if (!process.env.POLLINATIONS_API_KEY) {
+    throw new Error('API key not configured');
+  }
+
   try {
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&model=flux&seed=${Math.floor(Math.random() * 99999)}`;
-    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: TIMEOUT_MS });
+    const url = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?model=flux`;
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: TIMEOUT_MS_SLOW,
+      headers: { Authorization: `Bearer ${process.env.POLLINATIONS_API_KEY}` }
+    });
     const buffer = Buffer.from(response.data);
+    const mimeType = response.headers['content-type']?.split(';')[0]?.trim() || 'image/jpeg';
 
-    if (!isValidPNG(buffer)) {
-      throw new Error('Invalid PNG response');
-    }
+    if (buffer.length < 100) throw new Error('Response too small to be a valid image');
 
-    return { buffer, providerName: 'Pollinations.ai', modelUsed: 'FLUX' };
+    return { buffer, mimeType, providerName: 'Pollinations.ai', modelUsed: 'FLUX' };
   } catch (err) {
     console.warn(`[AI] Provider Pollinations-FLUX failed: ${err.message}`);
     throw err;
@@ -31,19 +39,26 @@ async function tryPollinationsFlux(prompt) {
 }
 
 /**
- * 2. Pollinations.ai - Turbo model (no key needed)
+ * 2. Pollinations.ai - Turbo model (requires POLLINATIONS_API_KEY)
  */
 async function tryPollinationsTurbo(prompt) {
+  if (!process.env.POLLINATIONS_API_KEY) {
+    throw new Error('API key not configured');
+  }
+
   try {
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&model=turbo&seed=${Math.floor(Math.random() * 99999)}`;
-    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: TIMEOUT_MS });
+    const url = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?model=turbo`;
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: TIMEOUT_MS_SLOW,
+      headers: { Authorization: `Bearer ${process.env.POLLINATIONS_API_KEY}` }
+    });
     const buffer = Buffer.from(response.data);
+    const mimeType = response.headers['content-type']?.split(';')[0]?.trim() || 'image/jpeg';
 
-    if (!isValidPNG(buffer)) {
-      throw new Error('Invalid PNG response');
-    }
+    if (buffer.length < 100) throw new Error('Response too small to be a valid image');
 
-    return { buffer, providerName: 'Pollinations.ai', modelUsed: 'Turbo' };
+    return { buffer, mimeType, providerName: 'Pollinations.ai', modelUsed: 'Turbo' };
   } catch (err) {
     console.warn(`[AI] Provider Pollinations-Turbo failed: ${err.message}`);
     throw err;
@@ -92,7 +107,7 @@ async function tryFal(prompt) {
         throw new Error('Invalid PNG response');
       }
 
-      return { buffer, providerName: 'fal.ai', modelUsed: 'FLUX.1-schnell' };
+      return { buffer, mimeType: 'image/png', providerName: 'fal.ai', modelUsed: 'FLUX.1-schnell' };
     }
 
     throw new Error('No images returned from fal.ai');
@@ -136,7 +151,7 @@ async function tryTogetherFlux(prompt) {
       throw new Error('Invalid PNG response');
     }
 
-    return { buffer, providerName: 'Together.ai', modelUsed: 'FLUX.1-schnell-Free' };
+    return { buffer, mimeType: 'image/png', providerName: 'Together.ai', modelUsed: 'FLUX.1-schnell-Free' };
   } catch (err) {
     console.warn(`[AI] Provider Together-FLUX failed: ${err.message}`);
     throw err;
@@ -172,7 +187,7 @@ async function tryTogetherSDXL(prompt) {
       throw new Error('Invalid PNG response');
     }
 
-    return { buffer, providerName: 'Together.ai', modelUsed: 'Stable Diffusion XL' };
+    return { buffer, mimeType: 'image/png', providerName: 'Together.ai', modelUsed: 'Stable Diffusion XL' };
   } catch (err) {
     console.warn(`[AI] Provider Together-SDXL failed: ${err.message}`);
     throw err;
@@ -213,7 +228,7 @@ async function trySegmindFlux(prompt) {
       throw new Error('Invalid PNG response');
     }
 
-    return { buffer, providerName: 'Segmind', modelUsed: 'FLUX-schnell' };
+    return { buffer, mimeType: 'image/png', providerName: 'Segmind', modelUsed: 'FLUX-schnell' };
   } catch (err) {
     console.warn(`[AI] Provider Segmind-FLUX failed: ${err.message}`);
     throw err;
@@ -254,7 +269,7 @@ async function trySegmindSDXL(prompt) {
       throw new Error('Invalid PNG response');
     }
 
-    return { buffer, providerName: 'Segmind', modelUsed: 'SDXL 1.0' };
+    return { buffer, mimeType: 'image/png', providerName: 'Segmind', modelUsed: 'SDXL 1.0' };
   } catch (err) {
     console.warn(`[AI] Provider Segmind-SDXL failed: ${err.message}`);
     throw err;
@@ -295,7 +310,7 @@ async function tryDeepAI(prompt) {
       throw new Error('Invalid PNG response');
     }
 
-    return { buffer, providerName: 'DeepAI', modelUsed: 'Text2Image' };
+    return { buffer, mimeType: 'image/png', providerName: 'DeepAI', modelUsed: 'Text2Image' };
   } catch (err) {
     console.warn(`[AI] Provider DeepAI failed: ${err.message}`);
     throw err;
@@ -330,7 +345,7 @@ async function tryGetimg(prompt) {
       throw new Error('Invalid PNG response');
     }
 
-    return { buffer, providerName: 'Getimg.ai', modelUsed: 'Stable Diffusion XL' };
+    return { buffer, mimeType: 'image/png', providerName: 'Getimg.ai', modelUsed: 'Stable Diffusion XL' };
   } catch (err) {
     console.warn(`[AI] Provider Getimg failed: ${err.message}`);
     throw err;
@@ -390,7 +405,7 @@ async function tryReplicate(prompt) {
       throw new Error('Invalid PNG response');
     }
 
-    return { buffer, providerName: 'Replicate', modelUsed: 'FLUX.1-schnell' };
+    return { buffer, mimeType: 'image/png', providerName: 'Replicate', modelUsed: 'FLUX.1-schnell' };
   } catch (err) {
     console.warn(`[AI] Provider Replicate failed: ${err.message}`);
     throw err;
@@ -413,7 +428,7 @@ async function tryCraiyon(prompt) {
       throw new Error('Invalid PNG response');
     }
 
-    return { buffer, providerName: 'Craiyon', modelUsed: 'Craiyon v3' };
+    return { buffer, mimeType: 'image/png', providerName: 'Craiyon', modelUsed: 'Craiyon v3' };
   } catch (err) {
     console.warn(`[AI] Provider Craiyon failed: ${err.message}`);
     throw err;
@@ -459,8 +474,8 @@ export async function generateImage(prompt) {
 export function getProvidersStatus() {
   return {
     providers: [
-      { name: 'pollinations-flux', keyRequired: false, configured: true },
-      { name: 'pollinations-turbo', keyRequired: false, configured: true },
+      { name: 'pollinations-flux', keyRequired: true, configured: !!process.env.POLLINATIONS_API_KEY },
+      { name: 'pollinations-turbo', keyRequired: true, configured: !!process.env.POLLINATIONS_API_KEY },
       { name: 'fal-flux', keyRequired: true, configured: !!process.env.FAL_API_KEY },
       { name: 'together-flux', keyRequired: true, configured: !!process.env.TOGETHER_API_KEY },
       { name: 'together-sdxl', keyRequired: true, configured: !!process.env.TOGETHER_API_KEY },

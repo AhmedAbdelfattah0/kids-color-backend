@@ -9,6 +9,7 @@ import galleryRouter from './routes/gallery.js';
 import categoriesRouter from './routes/categories.js';
 import providersRouter from './routes/providers.js';
 import libraryRouter from './routes/library.js';
+import imagesRouter from './routes/images.js';
 import { runMigrations } from './db/migrations.js';
 import pool from './db/database.js';
 
@@ -96,6 +97,9 @@ const uploadsDir = process.env.NODE_ENV === 'production'
   : path.join(process.cwd(), 'uploads');
 
 app.use('/uploads', express.static(uploadsDir));
+
+// Image serving from DB (Vercel-safe — no ephemeral /tmp dependency)
+app.use('/images', imagesRouter);
 
 // API Routes
 app.use('/api/generate', generateRouter);

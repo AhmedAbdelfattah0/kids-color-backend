@@ -10,9 +10,11 @@ export async function insertImage(imageData) {
   const query = `
     INSERT INTO images (
       id, keyword, keyword_normalized, category, prompt,
-      filename, image_url, file_size, width, height, source
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-    RETURNING *
+      filename, image_url, file_size, width, height, source, image_data, mime_type
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    RETURNING id, keyword, keyword_normalized, category, prompt,
+              filename, image_url, file_size, width, height, source,
+              download_count, print_count, created_at, is_active, mime_type
   `;
 
   const values = [
@@ -26,11 +28,22 @@ export async function insertImage(imageData) {
     imageData.file_size,
     imageData.width,
     imageData.height,
-    imageData.source || 'ai'
+    imageData.source || 'ai',
+    imageData.image_data || null,
+    imageData.mime_type || 'image/png'
   ];
 
   const result = await pool.query(query, values);
   return result.rows[0];
+}
+
+/**
+ * Get image binary data by filename (for serving images from DB)
+ */
+export async function getImageByFilename(filename) {
+  const query = 'SELECT id, filename, image_data, mime_type FROM images WHERE filename = $1 AND is_active = TRUE';
+  const result = await pool.query(query, [filename]);
+  return result.rows[0] || null;
 }
 
 /**

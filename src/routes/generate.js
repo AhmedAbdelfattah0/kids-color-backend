@@ -1,9 +1,8 @@
 import express from 'express';
 import { enhancePrompt, normalizeKeyword } from '../services/promptService.js';
-import { saveImageFromBuffer, saveImageFromUrl } from '../services/imageService.js';
-import { insertImage, searchByKeyword } from '../services/galleryService.js';
+import { saveImageFromBuffer } from '../services/imageService.js';
+import { insertImage } from '../services/galleryService.js';
 import { generateImage } from '../services/aiService.js';
-import { searchLibrary } from '../services/libraryService.js';
 
 const router = express.Router();
 
@@ -43,11 +42,11 @@ setInterval(() => {
 
 /**
  * POST /api/generate
- * Hybrid flow: database cache → library → AI as last resort
+ * Always generates a fresh image via AI and stores it in the DB.
  */
 router.post('/', async (req, res) => {
   try {
-    const { keyword, category, forceNew = false } = req.body;
+    const { keyword, category } = req.body;
 
     // Validate input
     if (!keyword || typeof keyword !== 'string' || keyword.trim().length === 0) {
@@ -60,99 +59,43 @@ router.post('/', async (req, res) => {
 
     const normalizedKeyword = normalizeKeyword(keyword);
 
-    // Check rate limit only for forced new generations (bypasses cache and library)
-    if (forceNew) {
-      const clientIp = req.ip || req.connection.remoteAddress;
-      if (!checkRateLimit(clientIp)) {
-        return res.status(429).json({
-          error: 'Rate limit exceeded. Please try again later.',
-          retryAfter: 3600 // 1 hour in seconds
-        });
-      }
+    // Rate limiting — all requests count
+    const clientIp = req.ip || req.connection.remoteAddress;
+    if (!checkRateLimit(clientIp)) {
+      return res.status(429).json({
+        error: 'Rate limit exceeded. Please try again later.',
+        retryAfter: 3600
+      });
     }
 
-    // Step 1 — Check database cache
-    if (!forceNew) {
-      const cached = await searchByKeyword(normalizedKeyword, category);
-      if (cached) {
-        console.log(`[Generate] Cache hit for: ${keyword}`);
-        return res.json({
-          id: cached.id,
-          keyword: cached.keyword,
-          category: cached.category,
-          imageUrl: `/uploads/${cached.filename}`,
-          prompt: cached.prompt,
-          downloadCount: cached.download_count,
-          printCount: cached.print_count,
-          source: cached.source,
-          fromCache: true,
-          createdAt: cached.created_at
-        });
-      }
-    }
-
-    // Step 2 — Search library
-    if (!forceNew) {
-      console.log(`[Generate] Cache miss — searching library for: ${keyword}`);
-      const libraryResults = await searchLibrary(keyword.trim(), category);
-      if (libraryResults.length > 0) {
-        const result = libraryResults[0];
-        const imageFile = await saveImageFromUrl(result.imageUrl, keyword.trim(), category, result.source);
-        const imageRecord = await insertImage({
-          keyword: keyword.trim(),
-          keyword_normalized: normalizedKeyword,
-          category: category || null,
-          prompt: `library result for: ${keyword.trim()}`,
-          filename: imageFile.filename,
-          imageUrl: imageFile.publicUrl,
-          file_size: imageFile.fileSize,
-          width: null,
-          height: null,
-          source: result.source
-        });
-        console.log(`[Generate] Library hit for: ${keyword} from ${result.source}`);
-        return res.json({
-          id: imageRecord.id,
-          keyword: imageRecord.keyword,
-          category: imageRecord.category,
-          imageUrl: imageFile.publicUrl,
-          prompt: imageRecord.prompt,
-          downloadCount: imageRecord.download_count,
-          printCount: imageRecord.print_count,
-          source: imageRecord.source,
-          fromCache: false,
-          fromLibrary: true,
-          createdAt: imageRecord.created_at
-        });
-      }
-    }
-
-    // Step 3 — AI generation as last resort
+    // AI generation
     const enhancedPrompt = enhancePrompt(keyword.trim(), category);
-    console.log(`[Generate] Library miss — calling AI for: ${keyword}`);
+    console.log(`[Generate] Calling AI for: ${keyword}`);
 
-    const { buffer, providerName, modelUsed } = await generateImage(enhancedPrompt);
+    const { buffer, mimeType, providerName, modelUsed } = await generateImage(enhancedPrompt);
     console.log(`[Generate] Image generated using: ${providerName} - ${modelUsed}`);
 
-    const imageFile = await saveImageFromBuffer(buffer);
+    const imageFile = await saveImageFromBuffer(buffer, mimeType);
     const imageRecord = await insertImage({
       keyword: keyword.trim(),
       keyword_normalized: normalizedKeyword,
       category: category || null,
       prompt: enhancedPrompt,
       filename: imageFile.filename,
-      imageUrl: `/uploads/${imageFile.filename}`,
+      imageUrl: `/images/${imageFile.filename}`,
       file_size: imageFile.fileSize,
       width: imageFile.width,
       height: imageFile.height,
-      source: 'ai'
+      source: 'ai',
+      image_data: buffer,
+      mime_type: imageFile.mimeType
     });
 
     res.json({
       id: imageRecord.id,
       keyword: imageRecord.keyword,
       category: imageRecord.category,
-      imageUrl: `/uploads/${imageRecord.filename}`,
+      imageUrl: `/images/${imageRecord.filename}`,
       prompt: imageRecord.prompt,
       downloadCount: imageRecord.download_count,
       printCount: imageRecord.print_count,
