@@ -4,6 +4,9 @@
   "description": "Backend API for KidsColor - Free printable coloring pages generator",
   "main": "src/app.js",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node src/app.js",
     "dev": "node --watch src/app.js"

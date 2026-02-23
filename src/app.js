@@ -94,32 +94,32 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server with database migrations
-async function startServer() {
-  try {
-    console.log('[Server] Starting server on port', PORT);
-
-    // Try migrations but don't block on failure
+// Only listen when running locally, not on Vercel
+if (process.env.NODE_ENV !== 'production') {
+  async function startServer() {
     try {
       await runMigrations(pool);
       console.log('[DB] Database ready');
     } catch (err) {
-      console.error('[DB] Migration error — continuing anyway:', err.message);
+      console.error('[DB] Migration error:', err.message);
     }
 
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`[Server] Running on port ${PORT}`);
-      console.log(`[Server] Health check available at http://0.0.0.0:${PORT}/health`);
     });
-  } catch (err) {
-    console.error('[Server] Fatal error:', err);
-    process.exit(1);
   }
+  startServer();
 }
 
-startServer().catch(err => {
-  console.error('[Server] Unhandled error:', err);
-  process.exit(1);
-});
+// Run migrations on cold start in production
+if (process.env.NODE_ENV === 'production') {
+  import('./db/database.js').then(({ default: pool }) => {
+    import('./db/migrations.js').then(({ runMigrations }) => {
+      runMigrations(pool)
+        .then(() => console.log('[DB] Migrations completed'))
+        .catch(err => console.error('[DB] Migration error:', err.message));
+    });
+  });
+}
 
 export default app;
