@@ -46,6 +46,29 @@ export async function saveImageFromBuffer(buffer) {
   };
 }
 
+const DOWNLOAD_HEADERS = {
+  'User-Agent': 'KidsColorApp/1.0 (https://kids-color-frontend.vercel.app; contact via github) axios/1.x'
+};
+
+/**
+ * Download image from URL and save to disk (for library images)
+ */
+export async function saveImageFromUrl(imageUrl, keyword, category, source = 'library') {
+  const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 15000, headers: DOWNLOAD_HEADERS });
+  const buffer = Buffer.from(response.data);
+  const filename = `${uuidv4()}.png`;
+  const filePath = path.join(uploadsDir, filename);
+  fs.writeFileSync(filePath, buffer);
+
+  return {
+    filename,
+    filePath,
+    fileSize: buffer.length,
+    publicUrl: `/uploads/${filename}`,
+    source
+  };
+}
+
 /**
  * Get absolute path for uploads directory
  */

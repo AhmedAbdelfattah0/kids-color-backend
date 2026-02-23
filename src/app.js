@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import generateRouter from './routes/generate.js';
 import galleryRouter from './routes/gallery.js';
 import categoriesRouter from './routes/categories.js';
+import providersRouter from './routes/providers.js';
+import libraryRouter from './routes/library.js';
 import { runMigrations } from './db/migrations.js';
 import pool from './db/database.js';
 
@@ -99,6 +101,8 @@ app.use('/uploads', express.static(uploadsDir));
 app.use('/api/generate', generateRouter);
 app.use('/api/gallery', galleryRouter);
 app.use('/api/categories', categoriesRouter);
+app.use('/api/providers', providersRouter);
+app.use('/api/library', libraryRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -114,7 +118,9 @@ app.get('/', (req, res) => {
       galleryPopular: 'GET /api/gallery/popular',
       galleryRecent: 'GET /api/gallery/recent',
       categories: 'GET /api/categories',
-      randomKeyword: 'GET /api/categories/random'
+      randomKeyword: 'GET /api/categories/random',
+      providersStatus: 'GET /api/providers/status',
+      librarySearch: 'GET /api/library/search'
     }
   });
 });

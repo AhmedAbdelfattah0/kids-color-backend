@@ -1,8 +1,9 @@
 import express from 'express';
 import { enhancePrompt, normalizeKeyword } from '../services/promptService.js';
-import { saveImageFromBuffer } from '../services/imageService.js';
+import { saveImageFromBuffer, saveImageFromUrl } from '../services/imageService.js';
 import { insertImage, searchByKeyword } from '../services/galleryService.js';
 import { generateImage } from '../services/aiService.js';
+import { searchLibrary } from '../services/libraryService.js';
 
 const router = express.Router();
 
@@ -42,7 +43,7 @@ setInterval(() => {
 
 /**
  * POST /api/generate
- * Generate a new coloring page or return existing one from gallery
+ * Hybrid flow: database cache → library → AI as last resort
  */
 router.post('/', async (req, res) => {
   try {
@@ -59,7 +60,7 @@ router.post('/', async (req, res) => {
 
     const normalizedKeyword = normalizeKeyword(keyword);
 
-    // Check rate limit only for new generations
+    // Check rate limit only for forced new generations (bypasses cache and library)
     if (forceNew) {
       const clientIp = req.ip || req.connection.remoteAddress;
       if (!checkRateLimit(clientIp)) {
@@ -70,37 +71,70 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Check if image already exists in gallery (unless forceNew is true)
+    // Step 1 — Check database cache
     if (!forceNew) {
-      const existingImage = await searchByKeyword(normalizedKeyword, category);
-      if (existingImage) {
+      const cached = await searchByKeyword(normalizedKeyword, category);
+      if (cached) {
+        console.log(`[Generate] Cache hit for: ${keyword}`);
         return res.json({
-          id: existingImage.id,
-          keyword: existingImage.keyword,
-          category: existingImage.category,
-          imageUrl: `/uploads/${existingImage.filename}`,
-          prompt: existingImage.prompt,
-          downloadCount: existingImage.download_count,
-          printCount: existingImage.print_count,
+          id: cached.id,
+          keyword: cached.keyword,
+          category: cached.category,
+          imageUrl: `/uploads/${cached.filename}`,
+          prompt: cached.prompt,
+          downloadCount: cached.download_count,
+          printCount: cached.print_count,
+          source: cached.source,
           fromCache: true,
-          createdAt: existingImage.created_at
+          createdAt: cached.created_at
         });
       }
     }
 
-    // Generate new image
+    // Step 2 — Search library
+    if (!forceNew) {
+      console.log(`[Generate] Cache miss — searching library for: ${keyword}`);
+      const libraryResults = await searchLibrary(keyword.trim(), category);
+      if (libraryResults.length > 0) {
+        const result = libraryResults[0];
+        const imageFile = await saveImageFromUrl(result.imageUrl, keyword.trim(), category, result.source);
+        const imageRecord = await insertImage({
+          keyword: keyword.trim(),
+          keyword_normalized: normalizedKeyword,
+          category: category || null,
+          prompt: `library result for: ${keyword.trim()}`,
+          filename: imageFile.filename,
+          imageUrl: imageFile.publicUrl,
+          file_size: imageFile.fileSize,
+          width: null,
+          height: null,
+          source: result.source
+        });
+        console.log(`[Generate] Library hit for: ${keyword} from ${result.source}`);
+        return res.json({
+          id: imageRecord.id,
+          keyword: imageRecord.keyword,
+          category: imageRecord.category,
+          imageUrl: imageFile.publicUrl,
+          prompt: imageRecord.prompt,
+          downloadCount: imageRecord.download_count,
+          printCount: imageRecord.print_count,
+          source: imageRecord.source,
+          fromCache: false,
+          fromLibrary: true,
+          createdAt: imageRecord.created_at
+        });
+      }
+    }
+
+    // Step 3 — AI generation as last resort
     const enhancedPrompt = enhancePrompt(keyword.trim(), category);
+    console.log(`[Generate] Library miss — calling AI for: ${keyword}`);
 
-    console.log(`Generating image for keyword: "${keyword}" (category: ${category || 'none'})`);
+    const { buffer, providerName, modelUsed } = await generateImage(enhancedPrompt);
+    console.log(`[Generate] Image generated using: ${providerName} - ${modelUsed}`);
 
-    // Generate image using AI service with automatic fallback
-    const { buffer, provider } = await generateImage(enhancedPrompt);
-    console.log(`[Generate Route] Image generated using: ${provider}`);
-
-    // Save image from buffer
     const imageFile = await saveImageFromBuffer(buffer);
-
-    // Save to database
     const imageRecord = await insertImage({
       keyword: keyword.trim(),
       keyword_normalized: normalizedKeyword,
@@ -110,7 +144,8 @@ router.post('/', async (req, res) => {
       imageUrl: `/uploads/${imageFile.filename}`,
       file_size: imageFile.fileSize,
       width: imageFile.width,
-      height: imageFile.height
+      height: imageFile.height,
+      source: 'ai'
     });
 
     res.json({
@@ -121,7 +156,10 @@ router.post('/', async (req, res) => {
       prompt: imageRecord.prompt,
       downloadCount: imageRecord.download_count,
       printCount: imageRecord.print_count,
+      source: imageRecord.source,
       fromCache: false,
+      fromLibrary: false,
+      providerUsed: providerName,
       createdAt: imageRecord.created_at
     });
 

@@ -10,8 +10,8 @@ export async function insertImage(imageData) {
   const query = `
     INSERT INTO images (
       id, keyword, keyword_normalized, category, prompt,
-      filename, image_url, file_size, width, height
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      filename, image_url, file_size, width, height, source
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING *
   `;
 
@@ -25,7 +25,8 @@ export async function insertImage(imageData) {
     imageData.imageUrl,
     imageData.file_size,
     imageData.width,
-    imageData.height
+    imageData.height,
+    imageData.source || 'ai'
   ];
 
   const result = await pool.query(query, values);

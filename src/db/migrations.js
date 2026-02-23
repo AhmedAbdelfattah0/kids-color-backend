@@ -23,6 +23,10 @@ export async function runMigrations(pool) {
       CREATE INDEX IF NOT EXISTS idx_created_at ON images(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_download_count ON images(download_count DESC);
     `);
+
+    await pool.query(`
+      ALTER TABLE images ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'ai';
+    `);
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
