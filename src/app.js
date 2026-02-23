@@ -52,6 +52,42 @@ app.use((req, res, next) => {
   next();
 });
 
+// Migration setup for production (Vercel serverless)
+let migrationsCompleted = false;
+let migrationPromise = null;
+
+function ensureMigrations() {
+  if (!migrationPromise) {
+    migrationPromise = runMigrations(pool)
+      .then(() => {
+        migrationsCompleted = true;
+        console.log('[DB] Migrations completed');
+      })
+      .catch(err => {
+        console.error('[DB] Migration error:', err.message);
+        throw err;
+      });
+  }
+  return migrationPromise;
+}
+
+// Middleware to ensure migrations run before any API request in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(async (req, res, next) => {
+    if (!migrationsCompleted) {
+      try {
+        await ensureMigrations();
+      } catch (err) {
+        return res.status(503).json({
+          error: 'Database not ready',
+          message: 'Migrations failed'
+        });
+      }
+    }
+    next();
+  });
+}
+
 // Static file serving for uploaded images
 const uploadsDir = process.env.NODE_ENV === 'production'
   ? '/tmp/uploads'
@@ -112,17 +148,6 @@ if (process.env.NODE_ENV !== 'production') {
     });
   }
   startServer();
-}
-
-// Run migrations on cold start in production
-if (process.env.NODE_ENV === 'production') {
-  import('./db/database.js').then(({ default: pool }) => {
-    import('./db/migrations.js').then(({ runMigrations }) => {
-      runMigrations(pool)
-        .then(() => console.log('[DB] Migrations completed'))
-        .catch(err => console.error('[DB] Migration error:', err.message));
-    });
-  });
 }
 
 export default app;
