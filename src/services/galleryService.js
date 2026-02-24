@@ -45,7 +45,7 @@ export async function insertImage(imageData) {
  * Get image binary data by filename (for serving images from DB)
  */
 export async function getImageByFilename(filename) {
-  const query = 'SELECT id, filename, image_data, mime_type FROM images WHERE filename = $1 AND is_active = TRUE';
+  const query = 'SELECT id, filename, image_url, image_data, mime_type FROM images WHERE filename = $1 AND is_active = TRUE';
   const result = await pool.query(query, [filename]);
   return result.rows[0] || null;
 }

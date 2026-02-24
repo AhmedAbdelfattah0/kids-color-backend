@@ -2,45 +2,44 @@ import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
+import { uploadToR2 } from './r2Service.js';
 
-// Use /tmp for Vercel compatibility — only writable directory in serverless
+// Local uploads dir — used as fallback when R2 is not configured
 const uploadsDir = process.env.NODE_ENV === 'production'
   ? '/tmp/uploads'
   : path.join(process.cwd(), 'uploads');
 
-// Create uploads dir only if it doesn't exist
-if (!fs.existsSync(uploadsDir)) {
+const r2Enabled = !!(
+  process.env.R2_ACCOUNT_ID &&
+  process.env.R2_ACCESS_KEY_ID &&
+  process.env.R2_SECRET_ACCESS_KEY &&
+  process.env.R2_BUCKET_NAME &&
+  process.env.R2_PUBLIC_URL
+);
+
+if (!r2Enabled && !fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-export async function saveImage(imageUrl) {
-  const filename = `${uuidv4()}.png`;
-  const filePath = path.join(uploadsDir, filename);
-
-  const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-  fs.writeFileSync(filePath, response.data);
-
-  return {
-    filename,
-    filePath,
-    fileSize: response.data.length,
-    publicUrl: `/images/${filename}`
-  };
-}
-
 /**
- * Save image from buffer (for AI-generated images)
+ * Save image from buffer — upload to R2 (preferred) or fall back to local disk.
  */
 export async function saveImageFromBuffer(buffer, mimeType = 'image/png') {
   const ext = mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/webp' ? 'webp' : 'png';
+
+  if (r2Enabled) {
+    const { filename, publicUrl } = await uploadToR2(buffer, mimeType);
+    return { filename, publicUrl, fileSize: buffer.length, mimeType, width: 1024, height: 1024 };
+  }
+
+  // Local fallback
   const filename = `${uuidv4()}.${ext}`;
   const filePath = path.join(uploadsDir, filename);
-
   fs.writeFileSync(filePath, buffer);
-
   return {
     filename,
     filePath,
+    publicUrl: `/images/${filename}`,
     fileSize: buffer.length,
     mimeType,
     width: 1024,
@@ -53,8 +52,7 @@ const DOWNLOAD_HEADERS = {
 };
 
 /**
- * Download image from URL and save to disk (for library images)
- * Detects SVG vs PNG from Content-Type and uses the correct extension.
+ * Download image from URL and save — upload to R2 or fall back to local disk.
  */
 export async function saveImageFromUrl(imageUrl, keyword, category, source = 'library') {
   const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 15000, headers: DOWNLOAD_HEADERS });
@@ -62,15 +60,21 @@ export async function saveImageFromUrl(imageUrl, keyword, category, source = 'li
 
   const mimeType = response.headers['content-type']?.split(';')[0]?.trim() || 'image/png';
   const ext = mimeType === 'image/svg+xml' ? 'svg' : 'png';
+
+  if (r2Enabled) {
+    const { filename, publicUrl } = await uploadToR2(buffer, mimeType);
+    return { filename, publicUrl, fileSize: buffer.length, mimeType, buffer, source };
+  }
+
+  // Local fallback
   const filename = `${uuidv4()}.${ext}`;
   const filePath = path.join(uploadsDir, filename);
   fs.writeFileSync(filePath, buffer);
-
   return {
     filename,
     filePath,
-    fileSize: buffer.length,
     publicUrl: `/images/${filename}`,
+    fileSize: buffer.length,
     mimeType,
     buffer,
     source
@@ -78,8 +82,24 @@ export async function saveImageFromUrl(imageUrl, keyword, category, source = 'li
 }
 
 /**
- * Get absolute path for uploads directory
+ * Download image from URL (legacy wrapper used by older routes).
  */
+export async function saveImage(imageUrl) {
+  const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+  const buffer = Buffer.from(response.data);
+  const mimeType = 'image/png';
+
+  if (r2Enabled) {
+    const { filename, publicUrl } = await uploadToR2(buffer, mimeType);
+    return { filename, publicUrl, fileSize: buffer.length };
+  }
+
+  const filename = `${uuidv4()}.png`;
+  const filePath = path.join(uploadsDir, filename);
+  fs.writeFileSync(filePath, buffer);
+  return { filename, filePath, fileSize: buffer.length, publicUrl: `/images/${filename}` };
+}
+
 export function getUploadsPath() {
   return uploadsDir;
 }

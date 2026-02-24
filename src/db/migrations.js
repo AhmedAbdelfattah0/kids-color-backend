@@ -69,6 +69,11 @@ export async function runMigrations(pool) {
       ALTER TABLE pack_images ADD COLUMN IF NOT EXISTS mime_type TEXT DEFAULT 'image/png';
     `);
 
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_pack_images_pack_position
+      ON pack_images(pack_id, position);
+    `);
+
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);

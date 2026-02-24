@@ -5,8 +5,9 @@ const router = express.Router();
 
 /**
  * GET /images/:filename
- * Serve image binary data from PostgreSQL (Vercel-safe, persists across invocations).
+ * Serve image binary data from PostgreSQL, or redirect to R2 URL.
  * Checks the main images table first, then falls back to pack_images.
+ * New images stored in R2 have image_data=NULL and a full https image_url — redirect those.
  */
 router.get('/:filename', async (req, res) => {
   try {
@@ -16,7 +17,16 @@ router.get('/:filename', async (req, res) => {
       image = await getPackImageByFilename(req.params.filename);
     }
 
-    if (!image || !image.image_data) {
+    if (!image) {
+      return res.status(404).send('Image not found');
+    }
+
+    // R2-hosted image — redirect to the public URL
+    if (!image.image_data && image.image_url?.startsWith('https://')) {
+      return res.redirect(301, image.image_url);
+    }
+
+    if (!image.image_data) {
       return res.status(404).send('Image not found');
     }
 

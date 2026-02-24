@@ -9,11 +9,14 @@ import { enhance } from '../services/promptService.js';
 
 const router = express.Router();
 
+// A row is "real" if it has binary data (old) OR an external R2 URL (new)
+const CACHED_WHERE = `pack_id = $1 AND (image_data IS NOT NULL OR image_url LIKE 'https://%')`;
+
 // GET /api/packs — list all packs with cache status
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT pack_id, COUNT(*) as count FROM pack_images GROUP BY pack_id`
+      `SELECT pack_id, COUNT(*) as count FROM pack_images WHERE image_data IS NOT NULL GROUP BY pack_id`
     );
     const cachedCounts = {};
     result.rows.forEach(row => {
@@ -39,7 +42,7 @@ router.get('/:id', async (req, res) => {
   if (!pack) return res.status(404).json({ error: 'Pack not found' });
 
   const result = await pool.query(
-    `SELECT COUNT(*) as count FROM pack_images WHERE pack_id = $1`,
+    `SELECT COUNT(*) as count FROM pack_images WHERE ${CACHED_WHERE}`,
     [pack.id]
   );
   const cachedCount = parseInt(result.rows[0].count);
@@ -58,7 +61,7 @@ router.get('/:id/images', async (req, res) => {
   if (!pack) return res.status(404).json({ error: 'Pack not found' });
 
   const result = await pool.query(
-    `SELECT * FROM pack_images WHERE pack_id = $1 ORDER BY position ASC`,
+    `SELECT * FROM pack_images WHERE ${CACHED_WHERE} ORDER BY position ASC`,
     [pack.id]
   );
 
@@ -78,21 +81,21 @@ router.get('/:id/images', async (req, res) => {
   });
 });
 
-// GET /api/packs/:id/generate-stream — generate all images for a pack (SSE stream)
+// GET /api/packs/:id/generate-stream — SSE: stream cached or freshly generated images
 router.get('/:id/generate-stream', async (req, res) => {
   const pack = packs.find(p => p.id === req.params.id);
   if (!pack) return res.status(404).json({ error: 'Pack not found' });
 
-  // Check if already cached
+  // Only count rows that have real image data (binary in DB) or an R2 URL (image_data=NULL)
   const cacheCheck = await pool.query(
-    `SELECT COUNT(*) as count FROM pack_images WHERE pack_id = $1`,
+    `SELECT COUNT(*) as count FROM pack_images WHERE ${CACHED_WHERE}`,
     [pack.id]
   );
   const cachedCount = parseInt(cacheCheck.rows[0].count);
 
   if (cachedCount >= 24) {
     const cached = await pool.query(
-      `SELECT * FROM pack_images WHERE pack_id = $1 ORDER BY position ASC`,
+      `SELECT * FROM pack_images WHERE ${CACHED_WHERE} ORDER BY position ASC`,
       [pack.id]
     );
 
@@ -145,13 +148,16 @@ router.get('/:id/generate-stream', async (req, res) => {
         const imageFile = await saveImageFromBuffer(buffer, mimeType);
 
         const id = uuidv4();
-        const imageUrl = `/images/${imageFile.filename}`;
+        const imageUrl = imageFile.publicUrl;
 
+        // ON CONFLICT (pack_id, position) ensures only one image per slot even if
+        // two requests race — the first writer wins, subsequent ones are silently ignored.
         await pool.query(
-          `INSERT INTO pack_images (id, pack_id, keyword, image_url, prompt, difficulty, age_range, category, position, image_data, mime_type)
+          `INSERT INTO pack_images
+             (id, pack_id, keyword, image_url, prompt, difficulty, age_range, category, position, image_data, mime_type)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-           ON CONFLICT (id) DO NOTHING`,
-          [id, pack.id, keyword, imageUrl, prompt, pack.difficulty, pack.ageRange, pack.category, i, buffer, mimeType]
+           ON CONFLICT (pack_id, position) DO NOTHING`,
+          [id, pack.id, keyword, imageUrl, prompt, pack.difficulty, pack.ageRange, pack.category, i, null, mimeType]
         );
 
         const image = {
