@@ -94,7 +94,7 @@ export async function fuzzySearchKeyword(keyword, limit = 5) {
 /**
  * Get paginated gallery
  */
-export async function getGallery({ page = 1, limit = 24, category = null, sort = 'newest', search = null, source = null }) {
+export async function getGallery({ page = 1, limit = 24, category = null, sort = 'newest', search = null, source = null, exclude = null }) {
   const offset = (page - 1) * limit;
 
   let query = 'SELECT * FROM images WHERE is_active = TRUE';
@@ -113,6 +113,13 @@ export async function getGallery({ page = 1, limit = 24, category = null, sort =
     const normalized = search.toLowerCase().trim().replace(/\s+/g, ' ');
     query += ` AND keyword_normalized LIKE $${paramCount}`;
     params.push(`%${normalized}%`);
+    paramCount++;
+  }
+
+  // Exclude specific image by id
+  if (exclude) {
+    query += ` AND id != $${paramCount}`;
+    params.push(exclude);
     paramCount++;
   }
 

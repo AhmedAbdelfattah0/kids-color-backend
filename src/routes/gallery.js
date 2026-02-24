@@ -26,8 +26,9 @@ router.get('/', async (req, res) => {
     const sort = req.query.sort || 'newest';
     const search = req.query.search || null;
     const source = req.query.source || null;
+    const exclude = req.query.exclude || null;
 
-    const result = await getGallery({ page, limit, category, sort, search, source });
+    const result = await getGallery({ page, limit, category, sort, search, source, exclude });
 
     // Format response
     const formattedImages = result.images.map(img => ({
