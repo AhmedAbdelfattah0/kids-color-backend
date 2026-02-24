@@ -35,6 +35,15 @@ export async function runMigrations(pool) {
     await pool.query(`
       ALTER TABLE images ADD COLUMN IF NOT EXISTS mime_type TEXT DEFAULT 'image/png';
     `);
+
+    await pool.query(`
+      ALTER TABLE images ADD COLUMN IF NOT EXISTS difficulty TEXT DEFAULT 'medium';
+    `);
+
+    await pool.query(`
+      ALTER TABLE images ADD COLUMN IF NOT EXISTS age_range TEXT DEFAULT '5-8';
+    `);
+
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);

@@ -10,11 +10,13 @@ export async function insertImage(imageData) {
   const query = `
     INSERT INTO images (
       id, keyword, keyword_normalized, category, prompt,
-      filename, image_url, file_size, width, height, source, image_data, mime_type
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      filename, image_url, file_size, width, height, source, image_data, mime_type,
+      difficulty, age_range
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     RETURNING id, keyword, keyword_normalized, category, prompt,
               filename, image_url, file_size, width, height, source,
-              download_count, print_count, created_at, is_active, mime_type
+              download_count, print_count, created_at, is_active, mime_type,
+              difficulty, age_range
   `;
 
   const values = [
@@ -30,7 +32,9 @@ export async function insertImage(imageData) {
     imageData.height,
     imageData.source || 'ai',
     imageData.image_data || null,
-    imageData.mime_type || 'image/png'
+    imageData.mime_type || 'image/png',
+    imageData.difficulty || 'medium',
+    imageData.age_range || '5-8'
   ];
 
   const result = await pool.query(query, values);
@@ -94,7 +98,7 @@ export async function fuzzySearchKeyword(keyword, limit = 5) {
 /**
  * Get paginated gallery
  */
-export async function getGallery({ page = 1, limit = 24, category = null, sort = 'newest', search = null, source = null, exclude = null }) {
+export async function getGallery({ page = 1, limit = 24, category = null, sort = 'newest', search = null, source = null, exclude = null, difficulty = null, ageRange = null }) {
   const offset = (page - 1) * limit;
 
   let query = 'SELECT * FROM images WHERE is_active = TRUE';
@@ -128,6 +132,20 @@ export async function getGallery({ page = 1, limit = 24, category = null, sort =
     query += ` AND source = 'ai'`;
   } else if (source === 'library') {
     query += ` AND source IN ('openclipart', 'wikimedia', 'library')`;
+  }
+
+  // Difficulty filter
+  if (difficulty) {
+    query += ` AND difficulty = $${paramCount}`;
+    params.push(difficulty);
+    paramCount++;
+  }
+
+  // Age range filter
+  if (ageRange) {
+    query += ` AND age_range = $${paramCount}`;
+    params.push(ageRange);
+    paramCount++;
   }
 
   // Sorting
@@ -165,6 +183,18 @@ export async function getGallery({ page = 1, limit = 24, category = null, sort =
     countQuery += ` AND source = 'ai'`;
   } else if (source === 'library') {
     countQuery += ` AND source IN ('openclipart', 'wikimedia', 'library')`;
+  }
+
+  if (difficulty) {
+    countQuery += ` AND difficulty = $${countParamCount}`;
+    countParams.push(difficulty);
+    countParamCount++;
+  }
+
+  if (ageRange) {
+    countQuery += ` AND age_range = $${countParamCount}`;
+    countParams.push(ageRange);
+    countParamCount++;
   }
 
   const countResult = await pool.query(countQuery, countParams);

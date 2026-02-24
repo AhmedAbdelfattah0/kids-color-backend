@@ -27,8 +27,10 @@ router.get('/', async (req, res) => {
     const search = req.query.search || null;
     const source = req.query.source || null;
     const exclude = req.query.exclude || null;
+    const difficulty = req.query.difficulty || null;
+    const ageRange = req.query.ageRange || null;
 
-    const result = await getGallery({ page, limit, category, sort, search, source, exclude });
+    const result = await getGallery({ page, limit, category, sort, search, source, exclude, difficulty, ageRange });
 
     // Format response
     const formattedImages = result.images.map(img => ({
@@ -40,6 +42,8 @@ router.get('/', async (req, res) => {
       downloadCount: img.download_count,
       printCount: img.print_count,
       source: img.source,
+      difficulty: img.difficulty,
+      ageRange: img.age_range,
       createdAt: img.created_at
     }));
 
@@ -227,6 +231,8 @@ router.get('/:id', async (req, res) => {
       downloadCount: image.download_count,
       printCount: image.print_count,
       source: image.source,
+      difficulty: image.difficulty,
+      ageRange: image.age_range,
       createdAt: image.created_at,
       relatedImages
     });

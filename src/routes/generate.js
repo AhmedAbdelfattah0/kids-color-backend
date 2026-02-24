@@ -1,5 +1,5 @@
 import express from 'express';
-import { enhancePrompt, normalizeKeyword } from '../services/promptService.js';
+import { enhance, normalizeKeyword } from '../services/promptService.js';
 import { saveImageFromBuffer } from '../services/imageService.js';
 import { insertImage } from '../services/galleryService.js';
 import { generateImage } from '../services/aiService.js';
@@ -46,7 +46,7 @@ setInterval(() => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { keyword, category } = req.body;
+    const { keyword, category, difficulty = 'medium', ageRange = '5-8' } = req.body;
 
     // Validate input
     if (!keyword || typeof keyword !== 'string' || keyword.trim().length === 0) {
@@ -69,7 +69,7 @@ router.post('/', async (req, res) => {
     }
 
     // AI generation
-    const enhancedPrompt = enhancePrompt(keyword.trim(), category);
+    const enhancedPrompt = enhance(keyword.trim(), category, difficulty, ageRange);
     console.log(`[Generate] Calling AI for: ${keyword}`);
 
     const { buffer, mimeType, providerName, modelUsed } = await generateImage(enhancedPrompt);
@@ -88,7 +88,9 @@ router.post('/', async (req, res) => {
       height: imageFile.height,
       source: 'ai',
       image_data: buffer,
-      mime_type: imageFile.mimeType
+      mime_type: imageFile.mimeType,
+      difficulty,
+      age_range: ageRange
     });
 
     res.json({
@@ -100,6 +102,8 @@ router.post('/', async (req, res) => {
       downloadCount: imageRecord.download_count,
       printCount: imageRecord.print_count,
       source: imageRecord.source,
+      difficulty: imageRecord.difficulty,
+      ageRange: imageRecord.age_range,
       fromCache: false,
       fromLibrary: false,
       providerUsed: providerName,
