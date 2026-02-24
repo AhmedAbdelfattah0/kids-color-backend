@@ -10,6 +10,7 @@ import categoriesRouter from './routes/categories.js';
 import providersRouter from './routes/providers.js';
 import libraryRouter from './routes/library.js';
 import imagesRouter from './routes/images.js';
+import packsRouter from './routes/packs.js';
 import { runMigrations } from './db/migrations.js';
 import pool from './db/database.js';
 
@@ -107,6 +108,7 @@ app.use('/api/gallery', galleryRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/providers', providersRouter);
 app.use('/api/library', libraryRouter);
+app.use('/api/packs', packsRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {

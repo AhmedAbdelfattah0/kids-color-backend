@@ -51,6 +51,15 @@ export async function getImageByFilename(filename) {
 }
 
 /**
+ * Get pack image binary data by filename (fallback for /images/:filename)
+ */
+export async function getPackImageByFilename(filename) {
+  const query = `SELECT id, image_url, image_data, mime_type FROM pack_images WHERE image_url = $1`;
+  const result = await pool.query(query, [`/images/${filename}`]);
+  return result.rows[0] || null;
+}
+
+/**
  * Get image by ID
  */
 export async function getImageById(id) {

@@ -44,6 +44,31 @@ export async function runMigrations(pool) {
       ALTER TABLE images ADD COLUMN IF NOT EXISTS age_range TEXT DEFAULT '5-8';
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pack_images (
+        id TEXT PRIMARY KEY,
+        pack_id TEXT NOT NULL,
+        keyword TEXT NOT NULL,
+        image_url TEXT NOT NULL,
+        prompt TEXT,
+        difficulty TEXT,
+        age_range TEXT,
+        category TEXT,
+        position INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pack_images_pack_id ON pack_images(pack_id);
+    `);
+
+    await pool.query(`
+      ALTER TABLE pack_images ADD COLUMN IF NOT EXISTS image_data BYTEA;
+    `);
+
+    await pool.query(`
+      ALTER TABLE pack_images ADD COLUMN IF NOT EXISTS mime_type TEXT DEFAULT 'image/png';
+    `);
+
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);

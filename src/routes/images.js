@@ -1,15 +1,20 @@
 import express from 'express';
-import { getImageByFilename } from '../services/galleryService.js';
+import { getImageByFilename, getPackImageByFilename } from '../services/galleryService.js';
 
 const router = express.Router();
 
 /**
  * GET /images/:filename
- * Serve image binary data from PostgreSQL (Vercel-safe, persists across invocations)
+ * Serve image binary data from PostgreSQL (Vercel-safe, persists across invocations).
+ * Checks the main images table first, then falls back to pack_images.
  */
 router.get('/:filename', async (req, res) => {
   try {
-    const image = await getImageByFilename(req.params.filename);
+    let image = await getImageByFilename(req.params.filename);
+
+    if (!image || !image.image_data) {
+      image = await getPackImageByFilename(req.params.filename);
+    }
 
     if (!image || !image.image_data) {
       return res.status(404).send('Image not found');
