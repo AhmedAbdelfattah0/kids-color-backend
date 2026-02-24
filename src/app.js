@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import axios from 'axios';
 import generateRouter from './routes/generate.js';
 import galleryRouter from './routes/gallery.js';
 import categoriesRouter from './routes/categories.js';
@@ -11,6 +12,7 @@ import providersRouter from './routes/providers.js';
 import libraryRouter from './routes/library.js';
 import imagesRouter from './routes/images.js';
 import packsRouter from './routes/packs.js';
+import birthdayRouter from './routes/birthday.js';
 import { runMigrations } from './db/migrations.js';
 import pool from './db/database.js';
 
@@ -102,6 +104,30 @@ app.use('/uploads', express.static(uploadsDir));
 // Image serving from DB (Vercel-safe — no ephemeral /tmp dependency)
 app.use('/images', imagesRouter);
 
+// Image proxy — fetches external images (e.g. R2) through the backend so canvas stays untainted
+app.get('/api/image-proxy', async (req, res) => {
+  const { url } = req.query;
+  const r2PublicUrl = process.env.R2_PUBLIC_URL;
+
+  if (!url || !r2PublicUrl || !decodeURIComponent(url).startsWith(r2PublicUrl)) {
+    return res.status(400).send('Invalid or disallowed URL');
+  }
+
+  try {
+    const response = await axios.get(decodeURIComponent(url), {
+      responseType: 'arraybuffer',
+      timeout: 15000
+    });
+    const mimeType = response.headers['content-type']?.split(';')[0]?.trim() || 'image/png';
+    res.set('Content-Type', mimeType);
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send(Buffer.from(response.data));
+  } catch (err) {
+    console.error('[ImageProxy] Failed to fetch:', err.message);
+    res.status(502).send('Failed to fetch image');
+  }
+});
+
 // API Routes
 app.use('/api/generate', generateRouter);
 app.use('/api/gallery', galleryRouter);
@@ -109,6 +135,7 @@ app.use('/api/categories', categoriesRouter);
 app.use('/api/providers', providersRouter);
 app.use('/api/library', libraryRouter);
 app.use('/api/packs', packsRouter);
+app.use('/api/birthday', birthdayRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {

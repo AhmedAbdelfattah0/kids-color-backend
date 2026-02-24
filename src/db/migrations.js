@@ -74,6 +74,19 @@ export async function runMigrations(pool) {
       ON pack_images(pack_id, position);
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS birthday_theme_keywords (
+        id SERIAL PRIMARY KEY,
+        theme_id TEXT NOT NULL,
+        age INTEGER NOT NULL,
+        keywords JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(theme_id, age)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_birthday_theme_keywords ON birthday_theme_keywords(theme_id, age);
+    `);
+
     console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
